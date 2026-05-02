@@ -1,0 +1,36 @@
+{
+  "category:modules": [
+    {
+      "id": "youtube-music",
+      "name": "YOUTUBE MUSIC (Optimized)",
+      "pkg": "com.8spine.module.youtube.music.optimized",
+      "file": "Yt music.8spine",
+      "download": "https://raw.githubusercontent.com/mxs3/8-yt-music-demo-/refs/heads/main/Yt%20music.8spine",
+      "version": "v2.0.1",
+      "code": 201,
+      "type": "MODULE",
+      "author": "nvmindl",
+      "description": "STREAM AUDIO FROM YOUTUBE MUSIC - NOW ENHANCED WITH CACHING AND PERFORMANCE IMPROVEMENTS",
+      "tags": [
+        "YT MUSIC",
+        "AUDIO",
+        "SETTINGS",
+        "OPTIMIZED"
+      ],
+      "featured": true,
+      "trusted": true,
+      "nsfw": false,
+      "size": 12000,
+      "lang": "all",
+      "folder": "modules",
+      "sources": [
+        {
+          "name": "YOUTUBE MUSIC OPTIMIZED",
+          "lang": "all",
+          "id": "youtube-music",
+          "baseUrl": "."
+        }
+      ]
+    }
+  ]
+}
