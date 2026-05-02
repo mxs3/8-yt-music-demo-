@@ -1,7 +1,7 @@
 {
   "category:modules": [
     {
-      "id": "youtube-music",
+      "id": "yt-music",
       "name": "YOUTUBE MUSIC (Optimized)",
       "pkg": "com.8spine.module.youtube.music.optimized",
       "file": "Yt music.8spine",
@@ -9,8 +9,8 @@
       "version": "v2.0.1",
       "code": 201,
       "type": "MODULE",
-      "author": "nvmindl",
-      "description": "STREAM AUDIO FROM YOUTUBE MUSIC - NOW ENHANCED WITH CACHING AND PERFORMANCE IMPROVEMENTS",
+      "author": "mxs3",
+      "description": "STREAM AUDIO FROM YOUTUBE MUSIC",
       "tags": [
         "YT MUSIC",
         "AUDIO",
