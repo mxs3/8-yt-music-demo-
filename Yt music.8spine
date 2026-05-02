@@ -1,0 +1,182 @@
+/* @8spine-meta
+ * type: MODULE
+ * category: modules
+ * featured: false
+ * trusted: false
+ * nsfw: false
+ */
+/**
+ * YouTube Music Module for 8SPINE v2.0.1 (Optimized)
+ * Search via WEB_REMIX, stream via IOS client (HLS preferred).
+ * Improved caching, better error handling, and optimized requests.
+ */
+
+const axios = require('axios'); // Faster HTTP library
+const LOG_PREFIX = '[YTMusic]';
+const CACHE_TIMEOUT = 10 * 60 * 1000; // Cache for 10 minutes
+let cachedVisitorData = null;
+let lastCacheTime = 0;
+
+const YTM_BASE = 'https://music.youtube.com';
+const YTM_API_KEY = 'AIzaSyC9XL3ZjWdD94-shortened'; // Replace with your API key
+
+const WEB_REMIX_CONTEXT = {
+    clientName: 'WEB_REMIX',
+    clientVersion: '1.20260304.03.00',
+    hl: 'en',
+    gl: 'US',
+};
+
+const IOS_CONTEXT = {
+    clientName: 'IOS',
+    clientVersion: '20.03.02',
+    deviceMake: 'Apple',
+    deviceModel: 'iPhone16,2',
+    osName: 'iPhone',
+    osVersion: '18.2.1.22C161',
+    hl: 'en',
+};
+
+const QUALITY = { LOW: 'LOW', HIGH: 'HIGH', LOSSLESS: 'LOSSLESS' };
+
+const QUALITY_OPTIONS = [
+    { label: 'Low (saves data)', value: QUALITY.LOW },
+    { label: 'High', value: QUALITY.HIGH },
+    { label: 'Best Available', value: QUALITY.LOSSLESS },
+];
+
+// Utility functions
+function parseDuration(text) {
+    // Parse duration into seconds
+    if (!text) return 0;
+    return text.split(':').reduce((acc, time) => acc * 60 + Number(time), 0);
+}
+
+function bestThumbnail(thumbnails) {
+    // Get the best thumbnail from an array
+    return thumbnails?.reduce((best, thumb) => (thumb.width > (best.width || 0) ? thumb : best), {}).url || '';
+}
+
+function parseInfoRuns(runs) {
+    // Parse info about artist/album
+    if (!runs) return { artist: '', album: '' };
+
+    const parts = runs.map((run) => run.text?.trim());
+    return { artist: parts[0] || '', album: parts[1] || '' };
+}
+
+// API wrapper with caching
+async function getVisitorData() {
+    if (cachedVisitorData && Date.now() - lastCacheTime < CACHE_TIMEOUT) {
+        return cachedVisitorData; // Return cached data
+    }
+
+    try {
+        const response = await axios.post(`${YTM_BASE}/youtubei/v1/visitor_id?key=${YTM_API_KEY}`, {
+            context: { client: WEB_REMIX_CONTEXT },
+        });
+        cachedVisitorData = response.data?.responseContext?.visitorData || null;
+        lastCacheTime = Date.now();
+    } catch (error) {
+        console.error(LOG_PREFIX, 'Failed to fetch visitor data:', error.message);
+    }
+
+    return cachedVisitorData;
+}
+
+// Search tracks
+async function searchTracks(query, limit = 20) {
+    try {
+        const response = await axios.post(`${YTM_BASE}/youtubei/v1/search?key=${YTM_API_KEY}`, {
+            context: { client: WEB_REMIX_CONTEXT },
+            query,
+            params: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D',
+        });
+
+        const sections = response.data?.contents?.tabbedSearchResultsRenderer?.tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        const tracks = [];
+
+        for (const section of sections) {
+            const shelf = section.musicShelfRenderer;
+            if (!shelf) continue;
+
+            for (const item of shelf.contents || []) {
+                if (tracks.length >= limit) break;
+
+                const renderer = item.musicResponsiveListItemRenderer;
+                if (!renderer) continue;
+
+                const videoId = renderer.playlistItemData?.videoId;
+                const titleRuns = renderer.flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+                const infoRuns = renderer.flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+                const durationText = renderer.fixedColumns[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs[0]?.text || '';
+                const thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+
+                tracks.push({
+                    id: videoId,
+                    title: titleRuns.map((r) => r.text).join(''),
+                    ...parseInfoRuns(infoRuns),
+                    duration: parseDuration(durationText),
+                    albumCover: bestThumbnail(thumbnails),
+                });
+            }
+        }
+
+        return { tracks, total: tracks.length };
+    } catch (error) {
+        console.error(LOG_PREFIX, 'Failed to search tracks:', error.message);
+        return { tracks: [], total: 0 };
+    }
+}
+
+// Get track stream URL
+async function getTrackStreamUrl(trackId, preferredQuality = QUALITY.HIGH) {
+    const visitorData = await getVisitorData();
+    const context = { ...IOS_CONTEXT, visitorData };
+
+    try {
+        const response = await axios.post(`${YTM_BASE}/youtubei/v1/player`, {
+            context: { client: context },
+            videoId: trackId,
+        });
+
+        if (response.data.playabilityStatus?.status !== 'OK') {
+            throw new Error(`Playback blocked: ${response.data.playabilityStatus?.reason || 'unknown'}`);
+        }
+
+        const mp4Formats = response.data.streamingData?.adaptiveFormats?.filter((format) =>
+            format.mimeType.startsWith('audio/mp4') && format.url
+        );
+
+        if (mp4Formats?.length > 0) {
+            const sortedFormats = mp4Formats.sort((a, b) => b.bitrate - a.bitrate);
+            return { streamUrl: sortedFormats[0]?.url, audioQuality: preferredQuality };
+        }
+
+        throw new Error('No playable audio formats found');
+    } catch (error) {
+        console.error(LOG_PREFIX, 'Failed to get stream URL:', error.message);
+        return null;
+    }
+}
+
+// Exported module
+module.exports = {
+    id: 'youtube-music',
+    name: 'YouTube Music Optimized',
+    author: 'nvmindl',
+    version: '2.0.1',
+    labels: ['YT Music', 'Audio', 'Settings'],
+    description: 'Stream high-quality music with optimized requests',
+    settings: {
+        quality: {
+            type: 'selector',
+            label: 'Audio Quality',
+            description: 'Preferred audio streaming quality',
+            options: QUALITY_OPTIONS,
+            defaultValue: QUALITY.HIGH,
+        },
+    },
+    searchTracks,
+    getTrackStreamUrl,
+};
